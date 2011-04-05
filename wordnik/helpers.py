@@ -1,9 +1,13 @@
-import json, re, urllib, urllib2, wordnik
+import json
+import re
+import urllib
+
 import wordnik
 
 def generate_docs(params, response, summary, path):
-    """This will generate the documentation for a function given some information
-    about the params, the response (not currently used), the summary, and the path."""
+    """This generates the documentation for a function given some information
+    about the params, the response (not currently used), the summary, and the
+     path."""
     docstring   = "{0}\n".format(summary)
     docstring  += "{0}\n".format(path)
     
@@ -59,9 +63,10 @@ def get_other_params(params):
 
 def get_required_params(params):
     required_params = []
-    for param in [ p for p in params if p['paramType'] != 'path' and p['required'] == True ]:
+    for param in [ p for p in params 
+                  if p['paramType'] != 'path' and p['required'] == True ]:
         p = {}
-        p['name']        = param.get('name') or 'body'
+        p['name']        = param.get('name', 'body')
         p['description'] = param.get('description')
         p['paramType']   = param.get('paramType')
         p['required']    = param.get('required')
@@ -69,7 +74,7 @@ def get_required_params(params):
     return required_params
       
 def create_method(name, doc, params, path, httpmethod):
-    """The magic behind the dynamically generated methods in the Wordnik object"""
+    """The magic behind the dynamically generated methods in Wordnik."""
     def _method(self, *args, **kwargs):
         return self._run_command(name, *args, **kwargs)
     
@@ -90,8 +95,13 @@ def process_args(path, params, args, kwargs):
     query_params    = get_query_params(params)
     
     if not set(given_params).issuperset(set(required_params)):
-        notsupplied = set(given_params).symmetric_difference(set(required_params)).intersection(set(required_params))
-        raise wordnik.MissingParameters("Some required parameters are missing: {0}".format(notsupplied))
+        notsupplied = (set(given_params) ^ set(required_params)) & \
+                        set(required_params)
+#TODO: delete after checked
+#    notsupplied = set(given_params).symmetric_difference(
+#       set(required_params)).intersection(set(required_params))
+        raise wordnik.MissingParameters("Some required parameters are missing: "
+                                        "{0}".format(notsupplied))
     
     ## get "{format} of of the way first"
     format = kwargs.get('format') or wordnik.DEFAULT_FORMAT
@@ -106,7 +116,7 @@ def process_args(path, params, args, kwargs):
         path = positional_args_re.sub(urllib.quote(arg), path, count=1)
 
     ## now look through the keyword args and do path substitution
-    for arg,value in kwargs.items():
+    for arg, value in kwargs.items():
         if arg not in path:
             continue
         bracketedString = "{" + arg + "}"
@@ -123,7 +133,8 @@ def process_args(path, params, args, kwargs):
     for param in query_params:
         name = param.get('name')
         if name in kwargs:
-            path += "{0}={1}&".format(name, urllib.quote(kwargs.pop(name).__str__()))
+            quoted = urllib.quote(str(kwargs.pop(name)))
+            path += "{0}={1}&".format(name, quoted)
 
     
     ## put all remaining kwargs in the headers
@@ -134,12 +145,14 @@ def process_args(path, params, args, kwargs):
     ## raise an exception.
     
     if positional_args_re.search(path):
-        raise wordnik.MissingParameters("Some required parameters are missing: {0}".format(path))
+        raise wordnik.MissingParameters("Some required parameters are missing: "
+                                        "{0}".format(path))
     
     ## similarly, raise and exception if we're missing a keyword arg.
     for param in params:
         if param['paramType'] == 'body' and body == None:
-            raise wordnik.MissingParameters("Some required parameters are missing: {0}".format(param))
+            raise wordnik.MissingParameters("Some required parameters are "
+                                            "missing: {0}".format(param))
     
     ## return a 3-tuple of (<URI path>, <headers>, <body>)
     return (path, headers, body)
