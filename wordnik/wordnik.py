@@ -1,6 +1,6 @@
 """Python wrapper for the Wordnik API. 
-
-This API implements all the methods described at http://developer.wordnik.com/docs
+This API implements all the methods described at 
+http://developer.wordnik.com/docs
 
 maintainer: Robin Walsh (robin@wordnik.com)
 """
@@ -12,12 +12,9 @@ try:
 except ImportError:
     import json
 import os
-import urllib
-import urllib2
-from optparse import OptionParser
+from sys import stderr
 from xml.etree import ElementTree
-from pprint import pprint
-from sys import stdout, stderr
+
 
 DEFAULT_HOST   = "api.wordnik.com"
 DEFAULT_URI    = "/v4"
@@ -25,6 +22,7 @@ DEFAULT_URL    = "http://" + DEFAULT_HOST + DEFAULT_URI
 FORMAT_JSON = "json"
 FORMAT_XML = "xml" 
 DEFAULT_FORMAT = FORMAT_JSON
+
 
 class RestfulError(Exception):
     """Raised when response from REST API indicates an error has occurred."""
@@ -36,7 +34,7 @@ class NoAPIKey(Exception):
     """Raised if we don't get an API key."""
 
 class MissingParameters(Exception):
-    """Raised if we try to call an API method with required parameters missing"""
+    """Raised if we try to call an API method without a required parameter."""
     
 class Wordnik(object):
     
@@ -89,25 +87,26 @@ class Wordnik(object):
         
         if username and password:
             try:
-                j = json.loads(self.account_get_authenticate(username, password=password))
-                self.token = j['token']
+                info = json.loads(self.account_get_authenticate(username,
+                                                             password=password))
+                self.token = info['token']
             except:
-                raise RestfulError("Could not authenticate with the given username and password")
-        
+                raise RestfulError("Could not authenticate with the given "
+                                   "username and password")
         
     @classmethod
-    def _populate_methods(klass):
+    def _populate_methods(cls):
         """This will create all the methods we need to interact with
         the Wordnik API"""
         
-        ## there is a directory called "endpoints"
+        # There is a directory called "endpoints".
         basedir = os.path.dirname(__file__)
         for filename in os.listdir('{0}/endpoints'.format(basedir)):
             j = json.load(open('{0}/endpoints/{1}'.format(basedir, filename)))
-            Wordnik._create_methods(j)
+            cls._create_methods(j)
             
     @classmethod
-    def _create_methods(klass, jsn):
+    def _create_methods(cls, jsn):
         """A helper method that will populate this module's namespace
         with methods (parsed directlly from the Wordnik API's output)
         """
@@ -115,19 +114,21 @@ class Wordnik(object):
     
         for method in endpoints:
             path = method['path']
-            for op in method['operations']:
-                summary = op['summary']
-                httpmethod = op['httpMethod']
-                params = op['parameters']
-                response = op['response']
+            for operation in method['operations']:
+                summary = operation['summary']
+                httpmethod = operation['httpMethod']
+                params = operation['parameters']
+                response = operation['response']
     
-                ## a path like: /user.{format}/{username}/wordOfTheDayList/{permalink} (GET)
-                ## will get translated into method: user_get_word_of_the_day_list
-                methodName  = helpers.normalize(path, httpmethod.lower())
-                docs        = helpers.generate_docs(params, response, summary, path)
-                method      = helpers.create_method(methodName, docs, params, path, httpmethod.upper())
+                # A path like: 
+                # /user.{format}/{username}/wordOfTheDayList/{permalink} (GET)
+                # will get translated into method: user_get_word_of_the_day_list
+                method_name = helpers.normalize(path, httpmethod.lower())
+                docs = helpers.generate_docs(params, response, summary, path)
+                method = helpers.create_method(method_name, docs, params, path, 
+                                               httpmethod.upper())
                 
-                setattr( Wordnik, methodName, method )
+                setattr(cls, method_name, method)
     
     def _run_command(self, command_name, *args, **kwargs):
         if 'api_key' not in kwargs:
@@ -135,9 +136,10 @@ class Wordnik(object):
         if self.token:
             kwargs.update( {"auth_token": self.token} )
         
-        command                 = getattr(self, command_name)
-        (path, headers, body)   = helpers.process_args(command._path, command._params, args, kwargs)
-        httpmethod              = command._http
+        command = getattr(self, command_name)
+        (path, headers, body) = helpers.process_args(command._path, 
+                                                  command._params, args, kwargs)
+        httpmethod = command._http
         
         return self._do_http(path, headers, body, httpmethod, beta=self.beta)
         
@@ -157,19 +159,18 @@ class Wordnik(object):
         
         """
         
-        path = "/word.%s?multi=true" % (kwargs.get('format') or DEFAULT_FORMAT)
-        
+        path = "/word.%s?multi=true" % (kwargs.get('format', DEFAULT_FORMAT))
         
         for calls_made, call in enumerate(calls):
             word = call[0]
             resource = call[1]
             if len(call) >= 3:
-                otherParams = call[2]
+                other_params = call[2]
             else:
-                otherParams = {}
+                other_params = {}
             ## Add the first resource to the URL
-            path += "&resource.{0}={1}/{2}".format(calls_made,word,resource)
-            for key,val in otherParams.items():
+            path += "&resource.{0}={1}/{2}".format(calls_made, word, resource)
+            for key, val in other_params.items():
                 ## Add potential extra params to the URL
                 path += "&{0}.{1}={2}".format(key, calls_made, val)
         
@@ -188,7 +189,8 @@ class Wordnik(object):
             resp = self.account_get_authenticate(username, password=password, 
                                                  format='json')
         except:
-            raise RestfulError("Could not authenticate with the given username and password")
+            raise RestfulError("Could not authenticate with the given "
+                               "username and password")
         else:
             self.token = resp['token']
             return True
